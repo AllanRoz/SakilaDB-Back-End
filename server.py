@@ -172,5 +172,20 @@ def actor_details():
 #     db.close()
 #     return jsonify(results)
 
+# Customers Page Feature 1
+# As a user I want to view a list of all customers (Pref. using pagination)
+@app.route("/customers", methods=['GET'])
+def customers():
+    db = get_db()
+    cursor = db.cursor()
+    sql_query = """SELECT * FROM sakila.customer;"""
+    cursor.execute(sql_query)
+    results = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(results)
+
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=8080)
