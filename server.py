@@ -45,7 +45,7 @@ def top5films():
 
 # Landing Page Feature 2
 # As a user I want to be able to click on any of the top 5 films and view its details
-@app.route("/details/film", methods=['POST'])
+@app.route("/details/top5films", methods=['POST'])
 def film_details():
     db = get_db()
     cursor = db.cursor()
@@ -97,7 +97,7 @@ def top5actors():
 #     cursor.close()
 #     db.close()
 #     return jsonify(results)
-@app.route("/details/actor", methods=['POST'])
+@app.route("/details/top5actors", methods=['POST'])
 def actor_details():
     db = get_db()
     cursor = db.cursor()
@@ -171,6 +171,54 @@ def actor_details():
 #     cursor.close()
 #     db.close()
 #     return jsonify(results)
+
+# Films Page Feature 1
+# As a user I want to be able to search a film by name of film, name of an actor, or genre of the film
+@app.route("/films", methods=['GET'])
+def films():
+    db = get_db()
+    cursor = db.cursor()
+    sql_query = """SELECT f.film_id, f.title AS film_title, f.release_year,
+                    GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') AS genres,
+                    GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name SEPARATOR ', ') AS actors
+                    FROM sakila.film f
+                    JOIN sakila.film_actor fa ON f.film_id = fa.film_id
+                    JOIN sakila.actor a ON fa.actor_id = a.actor_id
+                    JOIN sakila.film_category fc ON f.film_id = fc.film_id
+                    JOIN sakila.category c ON fc.category_id = c.category_id
+                    GROUP BY f.film_id, f.title, f.release_year
+                    ORDER BY f.title;"""
+    cursor.execute(sql_query)
+    results = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(results)
+
+# Films Page Feature 2
+# As a user I want to be able to view details of the film
+@app.route("/details/filmdata", methods=['POST'])
+def filmsData():
+    db = get_db()
+    cursor = db.cursor()
+
+    # Getting data film_id
+    data = request.get_json()
+    film_id = data['film_id']
+    sql_query = """SELECT f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, f.length, f.replacement_cost, 
+                    f.rating, f.special_features,f.last_update,
+                    GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name SEPARATOR ', ') AS actors
+                    FROM sakila.film f
+                    JOIN sakila.film_actor fa ON f.film_id = fa.film_id
+                    JOIN sakila.actor a ON fa.actor_id = a.actor_id
+                    WHERE f.film_id = %s
+                    GROUP BY f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, 
+                            f.length, f.replacement_cost, f.rating, f.special_features, f.last_update"""
+    cursor.execute(sql_query, film_id)
+    results = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(results)
+
 
 # Customers Page Feature 1
 # As a user I want to view a list of all customers (Pref. using pagination)
