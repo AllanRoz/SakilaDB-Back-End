@@ -234,6 +234,43 @@ def customers():
     return jsonify(results)
 
 
+# Customers Page Feature 6
+# As a user I want to be able to view details of the film
+@app.route("/details/customerdata", methods=['POST'])
+def customersData():
+    db = get_db()
+    cursor = db.cursor()
+
+    # Getting data film_id
+    data = request.get_json()
+    customer_id = data['customer_id']
+    sql_query = """SELECT 
+    c.customer_id, 
+    c.first_name, 
+    c.last_name, 
+    c.email, 
+    a.address, 
+    a.district, 
+    a.postal_code, 
+    a.phone, 
+    ci.city, 
+    co.country, 
+    c.create_date,
+    c.renting,
+    c.rented,
+    c.last_update
+FROM customer c
+JOIN address a ON c.address_id = a.address_id
+JOIN city ci ON a.city_id = ci.city_id
+JOIN country co ON ci.country_id = co.country_id
+WHERE c.customer_id = %s;
+"""
+    cursor.execute(sql_query, customer_id)
+    results = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(results)
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=8080)
