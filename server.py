@@ -256,20 +256,57 @@ def customersData():
     ci.city, 
     co.country, 
     c.create_date,
-    c.renting,
-    c.rented,
-    c.last_update
-FROM customer c
-JOIN address a ON c.address_id = a.address_id
-JOIN city ci ON a.city_id = ci.city_id
-JOIN country co ON ci.country_id = co.country_id
-WHERE c.customer_id = %s;
+    c.last_update,
+    SUM(CASE WHEN r.return_date IS NOT NULL THEN 1 ELSE 0 END) AS rented,
+    SUM(CASE WHEN r.return_date IS NULL THEN 1 ELSE 0 END) AS renting
+FROM sakila.customer c
+JOIN sakila.address a ON c.address_id = a.address_id
+JOIN sakila.city ci ON a.city_id = ci.city_id
+JOIN sakila.country co ON ci.country_id = co.country_id
+LEFT JOIN sakila.rental r ON c.customer_id = r.customer_id
+LEFT JOIN sakila.inventory i ON r.inventory_id = i.inventory_id
+LEFT JOIN sakila.film f ON i.film_id = f.film_id
+WHERE c.customer_id =%s;
 """
     cursor.execute(sql_query, customer_id)
     results = cursor.fetchall()
     cursor.close()
     db.close()
     return jsonify(results)
+
+# Customers Page Feature 7
+# As a user I want to be able to indicate that a customer has returned a rented movie
+@app.route("/returnFilm", methods=['POST'])
+def returnFilm():
+    db = get_db()
+    cursor = db.cursor()
+
+    # Getting data
+    data = request.get_json()
+    customer_id = data['customer_id']
+    film_id = data['film_id']
+
+    sql_query = """UPDATE sakila.rental r
+    JOIN sakila.inventory i ON r.inventory_id = i.inventory_id
+    SET r.return_date = NOW()
+    WHERE r.customer_id = %s
+    AND i.film_id = %s
+    AND r.return_date IS NULL;
+    """
+
+    cursor.execute(sql_query, (customer_id, film_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    if cursor.rowcount > 0:
+        return jsonify({"message": "Film returned"})
+    else:
+        return jsonify({"message": "Film could not be returned"})
+
+    
+
+
 
 
 if __name__ == "__main__":
