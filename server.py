@@ -80,23 +80,6 @@ def top5actors():
     db.close()
     return jsonify(results)
 
-# Landing Page Feature 4
-# As a user I want to be able to view the actor’s details and view their top 5 rented films
-# @app.route("/details/actor", methods=['POST'])
-# def actor_details():
-#     db = get_db()
-#     cursor = db.cursor()
-    
-#     # Getting data film_id
-#     data = request.get_json()
-#     actor_id = data['actor_id']
-
-#     sql_query = """SELECT * FROM sakila.actor WHERE actor_id = %s;"""
-#     cursor.execute(sql_query, (actor_id))
-#     results = cursor.fetchall()
-#     cursor.close()
-#     db.close()
-#     return jsonify(results)
 @app.route("/details/top5actors", methods=['POST'])
 def actor_details():
     db = get_db()
@@ -135,42 +118,6 @@ def actor_details():
     return jsonify(results)
 
 
-# @app.route("/top_actor_films", methods=['POST'])
-# def top_films_of_top_actors():
-#     db = get_db()
-#     cursor = db.cursor()
-
-#     # Getting data film_id
-#     data = request.get_json()
-#     actor_id = data['actor_id']
-
-#     sql_query = """WITH actor_most AS (
-#                         SELECT a.actor_id, a.first_name, a.last_name, 
-#                         COUNT(fa.film_id) AS film_count
-#                         FROM sakila.actor a
-#                         JOIN sakila.film_actor fa ON a.actor_id = fa.actor_id
-#                         WHERE a.actor_id = %s
-#                         GROUP BY a.actor_id, a.first_name, a.last_name
-#                     ),
-#                     top_rented_movies AS (
-#                         SELECT f.film_id, f.title, 
-#                         COUNT(r.rental_id) AS rental_count
-#                         FROM sakila.film f
-#                         JOIN sakila.inventory i ON f.film_id = i.film_id
-#                         JOIN sakila.rental r ON i.inventory_id = r.inventory_id
-#                         JOIN sakila.film_actor fa ON f.film_id = fa.film_id
-#                         JOIN actor_most am ON fa.actor_id = am.actor_id
-#                         GROUP BY f.film_id, f.title
-#                         ORDER BY  rental_count DESC
-#                         LIMIT 5
-#                     )
-#                     SELECT film_id, title, rental_count
-#                     FROM top_rented_movies;"""
-#     cursor.execute(sql_query, (actor_id))
-#     results = cursor.fetchall()
-#     cursor.close()
-#     db.close()
-#     return jsonify(results)
 
 # Films Page Feature 1
 # As a user I want to be able to search a film by name of film, name of an actor, or genre of the film
@@ -219,11 +166,88 @@ def filmsData():
     db.close()
     return jsonify(results)
 
+# Films Page Feature 3
+# As a user I want to be able to rent a film out to a customer
+@app.route("/rentFilm", methods=['POST'])
+def rentFilm():
+    # Get the database connection and cursor
+    db = get_db()
+    cursor = db.cursor()
+
+    # Getting data from the request
+    data = request.get_json()
+    customer_id = data['customer_id']
+    film_id = data['film_id']
+
+    # Prepare the SQL query to create a rental
+    sql_query = """
+    INSERT INTO sakila.rental (customer_id, inventory_id, rental_date, return_date, staff_id)
+    SELECT %s, i.inventory_id, NOW(), NULL, 1
+    FROM sakila.inventory i
+    WHERE i.film_id = %s
+    AND i.inventory_id NOT IN (
+        SELECT r.inventory_id 
+        FROM sakila.rental r
+        WHERE r.return_date IS NULL
+    );
+    """
+    
+    # Execute the query
+    cursor.execute(sql_query, (customer_id, film_id))
+
+    # Commit the transaction
+    db.commit()
+
+    # Close the cursor and connection
+    cursor.close()
+    db.close()
+
+    # Return success response
+    return jsonify({"message": "Film rented successfully"})
+
+# Films Page Feature 3
+# Check Film Availability
+@app.route('/checkFilmAvailability', methods=['POST'])
+def check_film_availability():
+    data = request.get_json()
+    film_id = data['film_id']
+
+    db = get_db()
+    cursor = db.cursor()
+
+    # Query to check available stock
+    sql_query = """
+        SELECT COUNT(*) AS available_stock 
+        FROM sakila.inventory 
+        WHERE film_id = %s AND inventory_id NOT IN (
+            SELECT inventory_id FROM sakila.rental WHERE return_date IS NULL
+        );
+    """
+    cursor.execute(sql_query, (film_id))
+    result = cursor.fetchone()
+
+    if result['available_stock'] > 0:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False})
 
 # Customers Page Feature 1
 # As a user I want to view a list of all customers (Pref. using pagination)
 @app.route("/customers", methods=['GET'])
 def customers():
+    db = get_db()
+    cursor = db.cursor()
+    sql_query = """SELECT * FROM sakila.customer;"""
+    cursor.execute(sql_query)
+    results = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify(results)
+
+# Customers Page Feature 3
+# As a user I want to be able to add a new customer
+@app.route("/customer/add", methods=['POST'])
+def addCustomer():
     db = get_db()
     cursor = db.cursor()
     sql_query = """SELECT * FROM sakila.customer;"""
