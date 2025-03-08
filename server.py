@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from datetime import datetime
 import pymysql
 
 app = Flask(__name__)
@@ -247,15 +248,72 @@ def customers():
 # Customers Page Feature 3
 # As a user I want to be able to add a new customer
 @app.route("/customer/add", methods=['POST'])
-def addCustomer():
+def add_customer():
     db = get_db()
     cursor = db.cursor()
-    sql_query = """SELECT * FROM sakila.customer;"""
-    cursor.execute(sql_query)
-    results = cursor.fetchall()
+    
+    # Get data from the request
+    data = request.get_json()
+
+    # Extract customer and address information
+    first_name = data.get('first_name')
+    last_name = data.get('last_name')
+    email = data.get('email')
+    phone = data.get('phone')
+    address = data.get('address')
+    address2 = data.get('address2')
+    district = data.get('district')
+    city = data.get('city')
+    postal_code = data.get('postal_code')
+
+    cursor = db.cursor()
+    query = "SELECT email FROM customer WHERE email = %s"
+    cursor.execute(query, (email,))
+    emailExists = cursor.fetchall()
+    if len(emailExists) != 0:
+        return jsonify({'message': 'Email already exists'})
+
+    # Insert data into address table
+    address_insert_query = """
+        INSERT INTO address (address, address2, district, city, postal_code, phone, last_update)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(address_insert_query, (address, address2, district, city, postal_code, phone, datetime.utcnow()))
+
+    # Commit the address insertion and get the generated address_id
+    db.commit()
+    address_id = cursor.lastrowid
+
+    # Insert data into customer table
+    customer_insert_query = """
+        INSERT INTO customer (first_name, last_name, email, address_id, phone, active, create_date, last_update)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(customer_insert_query, (first_name, last_name, email, address_id, phone, 1, datetime.utcnow(), datetime.utcnow()))
+
+    # Commit the customer insertion
+    db.commit()
+
+    # Fetch the newly inserted customer to return it in the response
+    cursor.execute("SELECT * FROM customer WHERE customer_id = %s", (cursor.lastrowid,))
+    new_customer = cursor.fetchone()
+
+    # Close the cursor and connection
     cursor.close()
     db.close()
-    return jsonify(results)
+
+    return jsonify({
+        'message': 'Customer added successfully',
+        'customer': {
+            'first_name': new_customer['first_name'],
+            'last_name': new_customer['last_name'],
+            'email': new_customer['email'],
+            'address': address,
+            'phone': new_customer['phone']
+        }
+    })
+    
+
 
 
 # Customers Page Feature 6
