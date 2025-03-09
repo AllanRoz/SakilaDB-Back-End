@@ -255,7 +255,6 @@ def add_customer():
     # Get data from the request
     data = request.get_json()
 
-    # Extract customer and address information
     first_name = data.get('first_name')
     last_name = data.get('last_name')
     email = data.get('email')
@@ -264,57 +263,178 @@ def add_customer():
     address2 = data.get('address2')
     district = data.get('district')
     city = data.get('city')
+    country = data.get('country')
     postal_code = data.get('postal_code')
 
-    cursor = db.cursor()
-    query = "SELECT email FROM customer WHERE email = %s"
-    cursor.execute(query, (email,))
-    emailExists = cursor.fetchall()
-    if len(emailExists) != 0:
+    if(first_name == '' or last_name == '' or email == '' or phone == '' or address == '' or district == '' or city == '' or postal_code == ''):
+        return jsonify({'message': 'Field empty'})
+
+    # Check if email already exists
+    cursor.execute("SELECT email FROM customer WHERE email = %s", (email,))
+    if cursor.fetchone():
         return jsonify({'message': 'Email already exists'})
 
-    # Insert data into address table
-    address_insert_query = """
-        INSERT INTO address (address, address2, district, city, postal_code, phone, last_update)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(address_insert_query, (address, address2, district, city, postal_code, phone, datetime.utcnow()))
+    # Check if the country exists
+    cursor.execute("SELECT country_id FROM country WHERE country = %s", (country,))
+    country_row = cursor.fetchone()
+    if country_row:
+        country_id = country_row['country_id']
+    else:
+        cursor.execute("INSERT INTO country (country, last_update) VALUES (%s, %s)", (country, datetime.utcnow()))
+        db.commit()
+        country_id = cursor.lastrowid
 
-    # Commit the address insertion and get the generated address_id
+    # Check if the city exists
+    cursor.execute("SELECT city_id FROM city WHERE city = %s AND country_id = %s", (city, country_id))
+    city_row = cursor.fetchone()
+    if city_row:
+        city_id = city_row['city_id']
+    else:
+        cursor.execute("INSERT INTO city (city, country_id, last_update) VALUES (%s, %s, %s)", (city, country_id, datetime.utcnow()))
+        db.commit()
+        city_id = cursor.lastrowid
+
+    # Check if the address exists
+    cursor.execute("SELECT address_id FROM address WHERE address = %s AND city_id = %s", (address, city_id))
+    address_row = cursor.fetchone()
+    if address_row:
+        address_id = address_row['address_id']
+    else:
+        cursor.execute("""
+            INSERT INTO address (address, address2, district, city_id, postal_code, phone, location, last_update) 
+            VALUES (%s, %s, %s, %s, %s, %s, POINT(0,0), NOW())
+        """, (address, address2, district, city_id, postal_code, phone))
+        db.commit()
+        address_id = cursor.lastrowid
+
+    # Insert new customer
+    cursor.execute("""
+        INSERT INTO customer (store_id, first_name, last_name, email, address_id, active, create_date, last_update)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+    """, (1, first_name, last_name, email, address_id, 1))
     db.commit()
-    address_id = cursor.lastrowid
 
-    # Insert data into customer table
-    customer_insert_query = """
-        INSERT INTO customer (first_name, last_name, email, address_id, phone, active, create_date, last_update)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(customer_insert_query, (first_name, last_name, email, address_id, phone, 1, datetime.utcnow(), datetime.utcnow()))
-
-    # Commit the customer insertion
-    db.commit()
-
-    # Fetch the newly inserted customer to return it in the response
-    cursor.execute("SELECT * FROM customer WHERE customer_id = %s", (cursor.lastrowid,))
-    new_customer = cursor.fetchone()
-
-    # Close the cursor and connection
     cursor.close()
     db.close()
 
-    return jsonify({
-        'message': 'Customer added successfully',
-        'customer': {
-            'first_name': new_customer['first_name'],
-            'last_name': new_customer['last_name'],
-            'email': new_customer['email'],
-            'address': address,
-            'phone': new_customer['phone']
-        }
-    })
+    return jsonify({'message': 'Customer added'})
+
+# Customers Page Feature 4
+# As a user I want to be able to edit a customer’s details
+@app.route("/customer/update", methods=['PUT'])
+def updateCustomer():
+    db = get_db()
+    cursor = db.cursor()
     
+    # Get data from the request
+    data = request.get_json()
+
+    customer_id = data.get('customer_id')
+    first_name = data.get('first_name')
+    last_name = data.get('last_name')
+    email = data.get('email')
+    phone = data.get('phone')
+    address = data.get('address')
+    address2 = data.get('address2')
+    district = data.get('district')
+    city = data.get('city')
+    country = data.get('country')
+    postal_code = data.get('postal_code')
+
+    if(first_name == '' or last_name == '' or email == '' or phone == '' or address == '' or district == '' or city == '' or postal_code == ''):
+        return jsonify({'message': 'Field empty'})
+
+    # Fetch the current customer data from the database
+    cursor.execute("SELECT email, address_id FROM customer WHERE customer_id = %s", (customer_id,))
+    customer = cursor.fetchone()
+
+    if not customer:
+        return jsonify({'message': 'Customer not found'}), 404
+    
+    current_email = customer['email']
+
+    if email != current_email:
+        cursor.execute("SELECT email FROM customer WHERE email = %s", (email,))
+        if cursor.fetchone():
+            return jsonify({'message': 'Email already exists'}), 400
+
+    cursor.execute("SELECT country_id FROM country WHERE country = %s", (country,))
+    country_row = cursor.fetchone()
+    if country_row:
+        country_id = country_row['country_id']
+    else:
+        cursor.execute("INSERT INTO country (country, last_update) VALUES (%s, %s)", (country, datetime.utcnow()))
+        db.commit()
+        country_id = cursor.lastrowid
+
+    cursor.execute("SELECT city_id FROM city WHERE city = %s AND country_id = %s", (city, country_id))
+    city_row = cursor.fetchone()
+    if city_row:
+        city_id = city_row['city_id']
+    else:
+        cursor.execute("INSERT INTO city (city, country_id, last_update) VALUES (%s, %s, %s)", (city, country_id, datetime.utcnow()))
+        db.commit()
+        city_id = cursor.lastrowid
+
+    cursor.execute("SELECT address_id FROM address WHERE address = %s AND city_id = %s", (address, city_id))
+    address_row = cursor.fetchone()
+    if address_row:
+        address_id = address_row['address_id']
+        cursor.execute("""
+            UPDATE address
+            SET address = %s, address2 = %s, district = %s, postal_code = %s, phone = %s, last_update = NOW()
+            WHERE address_id = %s
+        """, (address, address2, district, postal_code, phone, address_id))
+    else:
+        cursor.execute("""
+            INSERT INTO address (address, address2, district, city_id, postal_code, phone, location, last_update) 
+            VALUES (%s, %s, %s, %s, %s, %s, POINT(0,0), NOW())
+        """, (address, address2, district, city_id, postal_code, phone))
+        db.commit()
+        address_id = cursor.lastrowid
+
+    # Update the customer record
+    cursor.execute("""
+        UPDATE customer 
+        SET first_name = %s, last_name = %s, email = %s, address_id = %s, last_update = NOW() 
+        WHERE customer_id = %s
+    """, (first_name, last_name, email, address_id, customer_id))
+    db.commit()
+
+    cursor.close()
+    db.close()
+
+    return jsonify({'message': 'Customer updated'}), 200
 
 
+# Customers Page Feature 5
+# As a user I want to be able to delete a customer if they no longer wish to patron at store
+@app.route("/deleteCustomer", methods=['POST'])
+def deleteCustomer():
+    db = get_db()
+    cursor = db.cursor()
+
+    # Getting data
+    data = request.get_json()
+    customer_id = data['customer_id']
+
+    sql_delete_payments = "DELETE FROM sakila.payment WHERE customer_id = %s;"
+    sql_delete_rentals = "DELETE FROM sakila.rental WHERE customer_id = %s;"
+    sql_delete_customer = "DELETE FROM sakila.customer WHERE customer_id = %s;"
+
+    cursor.execute(sql_delete_payments, (customer_id,))
+    cursor.execute(sql_delete_rentals, (customer_id,))
+    cursor.execute(sql_delete_customer, (customer_id,))
+
+    db.commit()
+    rows_deleted = cursor.rowcount
+    cursor.close()
+    db.close()
+
+    if rows_deleted > 0:
+        return jsonify({"message": "Customer deleted successfully"})
+    else:
+        return jsonify({"message": "Customer could not be deleted or does not exist"})
 
 # Customers Page Feature 6
 # As a user I want to be able to view details of the film
@@ -332,6 +452,7 @@ def customersData():
     c.last_name, 
     c.email, 
     a.address, 
+    a.address2,
     a.district, 
     a.postal_code, 
     a.phone, 
@@ -348,7 +469,7 @@ JOIN sakila.country co ON ci.country_id = co.country_id
 LEFT JOIN sakila.rental r ON c.customer_id = r.customer_id
 LEFT JOIN sakila.inventory i ON r.inventory_id = i.inventory_id
 LEFT JOIN sakila.film f ON i.film_id = f.film_id
-WHERE c.customer_id =%s;
+WHERE c.customer_id = %s;
 """
     cursor.execute(sql_query, customer_id)
     results = cursor.fetchall()
