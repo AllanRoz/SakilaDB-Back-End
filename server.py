@@ -179,6 +179,8 @@ def rentFilm():
     data = request.get_json()
     customer_id = data['customer_id']
     film_id = data['film_id']
+    print(customer_id)
+    print(film_id)
 
     # Prepare the SQL query to create a rental
     sql_query = """
@@ -190,7 +192,9 @@ def rentFilm():
         SELECT r.inventory_id 
         FROM sakila.rental r
         WHERE r.return_date IS NULL
-    );
+    )
+    ORDER BY i.inventory_id ASC
+    LIMIT 1;
     """
     
     # Execute the query
@@ -204,7 +208,7 @@ def rentFilm():
     db.close()
 
     # Return success response
-    return jsonify({"message": "Film rented successfully"})
+    return jsonify({"message": "Film rented"})
 
 # Films Page Feature 3
 # Check Film Availability
@@ -461,7 +465,7 @@ def customersData():
     c.create_date,
     c.last_update,
     SUM(CASE WHEN r.return_date IS NOT NULL THEN 1 ELSE 0 END) AS rented,
-    SUM(CASE WHEN r.return_date IS NULL THEN 1 ELSE 0 END) AS renting
+    SUM(CASE WHEN r.return_date IS NULL AND r.rental_date IS NOT NULL THEN 1 ELSE 0 END) AS renting
 FROM sakila.customer c
 JOIN sakila.address a ON c.address_id = a.address_id
 JOIN sakila.city ci ON a.city_id = ci.city_id
@@ -489,12 +493,20 @@ def returnFilm():
     customer_id = data['customer_id']
     film_id = data['film_id']
 
-    sql_query = """UPDATE sakila.rental r
-    JOIN sakila.inventory i ON r.inventory_id = i.inventory_id
-    SET r.return_date = NOW()
-    WHERE r.customer_id = %s
-    AND i.film_id = %s
-    AND r.return_date IS NULL;
+    sql_query = """UPDATE sakila.rental 
+    SET return_date = NOW()
+    WHERE rental_id = (
+        SELECT rental_id FROM (
+            SELECT r.rental_id
+            FROM sakila.rental r
+            JOIN sakila.inventory i ON r.inventory_id = i.inventory_id
+            WHERE r.customer_id = %s
+            AND i.film_id = %s
+            AND r.return_date IS NULL
+            ORDER BY r.rental_date ASC
+            LIMIT 1
+        ) AS subquery
+    );
     """
 
     cursor.execute(sql_query, (customer_id, film_id))
