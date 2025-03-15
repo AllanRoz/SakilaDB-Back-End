@@ -126,7 +126,30 @@ def actor_details():
 def films():
     db = get_db()
     cursor = db.cursor()
-    sql_query = """SELECT f.film_id, f.title AS film_title, f.release_year,
+
+    # Getting data 
+    # data = request.get_json()
+    # limit = data.get('limit', 10)
+    # page = data.get('page', 1) - 1
+    # search = data.get('search', '').strip().lower()
+    # filter_choice = data.get('filterChoice', '')
+
+    # sql_query = """SELECT f.film_id, f.title, f.release_year,
+    #                 GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') AS genres,
+    #                 GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name SEPARATOR ', ') AS actors
+    #                 FROM sakila.film f
+    #                 JOIN sakila.film_actor fa ON f.film_id = fa.film_id
+    #                 JOIN sakila.actor a ON fa.actor_id = a.actor_id
+    #                 JOIN sakila.film_category fc ON f.film_id = fc.film_id
+    #                 JOIN sakila.category c ON fc.category_id = c.category_id
+    #                 WHERE 
+    #                     (%s = '' OR LOWER(f.title) LIKE CONCAT('%%', %s, '%%'))
+    #                     OR (%s = 'Actor' AND LOWER(CONCAT(a.first_name, ' ', a.last_name)) LIKE CONCAT('%%', %s, '%%'))
+    #                     OR (%s = 'Genre' AND LOWER(c.name) LIKE CONCAT('%%', %s, '%%'))
+    #                 GROUP BY f.film_id, f.title, f.release_year
+    #                 ORDER BY f.title
+    #                 LIMIT %s OFFSET %s"""
+    sql_query = """SELECT f.film_id, f.title, f.release_year,
                     GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') AS genres,
                     GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name SEPARATOR ', ') AS actors
                     FROM sakila.film f
@@ -135,8 +158,10 @@ def films():
                     JOIN sakila.film_category fc ON f.film_id = fc.film_id
                     JOIN sakila.category c ON fc.category_id = c.category_id
                     GROUP BY f.film_id, f.title, f.release_year
-                    ORDER BY f.title;"""
+                    ORDER BY f.title"""
     cursor.execute(sql_query)
+    # cursor.execute(sql_query, (search, search, filter_choice, search, filter_choice, search, limit, limit*page))
+
     results = cursor.fetchall()
     cursor.close()
     db.close()
@@ -152,14 +177,14 @@ def filmsData():
     # Getting data film_id
     data = request.get_json()
     film_id = data['film_id']
-    sql_query = """SELECT f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, f.length, f.replacement_cost, 
+    sql_query = """SELECT f.title, f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, f.length, f.replacement_cost, 
                     f.rating, f.special_features,f.last_update,
                     GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name SEPARATOR ', ') AS actors
                     FROM sakila.film f
                     JOIN sakila.film_actor fa ON f.film_id = fa.film_id
                     JOIN sakila.actor a ON fa.actor_id = a.actor_id
                     WHERE f.film_id = %s
-                    GROUP BY f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, 
+                    GROUP BY f.title, f.film_id, f.description, f.release_year, f.rental_duration, f.rental_rate, 
                             f.length, f.replacement_cost, f.rating, f.special_features, f.last_update"""
     cursor.execute(sql_query, film_id)
     results = cursor.fetchall()
